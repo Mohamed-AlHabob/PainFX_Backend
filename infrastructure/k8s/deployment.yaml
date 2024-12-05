@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: Detect-counterfeiting
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: Detect-counterfeiting
+  template:
+    metadata:
+      labels:
+        app: Detect-counterfeiting
+    spec:
+      containers:
+      - name: backend
+        image: Detect-counterfeiting-backend
+        ports:
+        - containerPort: 8000
+      - name: celery
+        image: Detect-counterfeiting-celery
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+      - name: frontend
+        image: Detect-counterfeiting-frontend
+        ports:
+        - containerPort: 3000
+      restartPolicy: Always

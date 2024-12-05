@@ -1,0 +1,451 @@
+virtual environment:
+ python -m venv venv
+source venv/Scripts/activate
+
+Django setup : 
+pip install django graphene-django
+creatr core app : 
+django-admin startproject myproject
+creater withers app :
+python manage.py startapp myapp
+
+requirements :
+pip install -r requirements.txt
+pip freeze > requirements.txt
+pip install --upgrade -r requirements.txt
+
+# Load environment variables from .env file manually
+env_file = BASE_DIR / '.env'
+if env_file.exists():
+    with open(env_file) as f:
+        for line in f:
+            if line.strip() and not line.startswith('#'):
+                key, value = line.strip().split('=', 1)
+                os.environ.setdefault(key, value)
+...............................................................
+Run Migrations: 
+python manage.py makemigrations
+python manage.py migrate
+---------------------------------------------------------------
+Create Super User 
+python manage.py createsuperuser
+---------------------------------------------------------------
+Run Server
+python manage.py runserver
+...............................................................
+.env
+postgresql://<username>:<password>@<host>:<port>/<database>
+
+---------------------------------------------------------------------------------------------------
+
+# Start the Application
+docker-compose up
+
+This command will:
+
+1. Build and start the PostgreSQL database.
+2. Build and start the Redis service.
+3. Build and start the Django backend.
+4. Build and start the Celery worker.
+5. Build and start the Next.js frontend.
+6. Build and start the Nginx service.
+
+# Apply Database Migrations:
+docker-compose exec backend python manage.py makemigrations
+
+docker-compose exec backend python manage.py migrate
+
+# Clear Database Schema
+docker-compose exec backend python manage.py flush
+
+# show migrations
+docker-compose exec backend python manage.py showmigrations
+docker-compose exec backend python manage.py startapp api
+
+
+# Create a Superuser:
+docker-compose exec backend python manage.py createsuperuser
+docker-compose exec backend python manage.py flush
+
+
+# Stopping the Application:
+docker-compose down
+
+# Fix the authen_celery build Error is not found backend
+docker build -f infrastructure/celery/celery-worker/Dockerfile -t authen_celery .
+
+# Fix statistics files
+docker-compose exec backend python manage.py collectstatic
+
+
+docker-compose exec backend pip install --no-cache-dir torch torchvision torchaudio
+
+// requirements.txt
+
+aniso8601==9.0.1
+asgiref==3.8.1
+async-timeout==4.0.3
+channels==4.1.0
+channels-redis==4.2.0
+dj-database-url==2.2.0
+Django==5.0.6
+django-allauth==0.63.3
+django-cors-headers==4.3.1
+django-environ==0.11.2
+django-filter==24.2
+django-graphql-jwt==0.4.0
+graphene==3.3
+graphene-django==3.2.2
+graphene-file-upload==1.3.0
+graphql-core==3.2.3
+graphql-relay==3.2.0
+msgpack==1.0.8
+pillow==10.3.0
+promise==2.3
+PyJWT==2.8.0
+redis==5.0.4
+Rx==1.6.3
+singledispatch==4.1.0
+six==1.16.0
+sqlparse==0.5.0
+text-unidecode==1.3
+typing_extensions==4.12.1
+tzdata==2024.1
+
+
+.gitignore file :
+// Start file
+# Django #
+*.log
+*.pot
+*.pyc
+__pycache__
+db.sqlite3
+media
+
+# Backup files # 
+*.bak 
+
+# If you are using PyCharm # 
+# User-specific stuff
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+
+# AWS User-specific
+.idea/**/aws.xml
+
+# Generated files
+.idea/**/contentModel.xml
+
+# Sensitive or high-churn files
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/dbnavigator.xml
+
+# Gradle
+.idea/**/gradle.xml
+.idea/**/libraries
+
+# File-based project format
+*.iws
+
+# IntelliJ
+out/
+
+# JIRA plugin
+atlassian-ide-plugin.xml
+
+# Python # 
+*.py[cod] 
+*$py.class 
+
+# Distribution / packaging 
+.Python build/ 
+develop-eggs/ 
+dist/ 
+downloads/ 
+eggs/ 
+.eggs/ 
+lib/ 
+lib64/ 
+parts/ 
+sdist/ 
+var/ 
+wheels/ 
+*.whl
+*.egg-info/ 
+.installed.cfg 
+*.egg 
+*.manifest 
+*.spec 
+
+# Installer logs 
+pip-log.txt 
+pip-delete-this-directory.txt 
+
+# Unit test / coverage reports 
+htmlcov/ 
+.tox/ 
+.coverage 
+.coverage.* 
+.cache 
+.pytest_cache/ 
+nosetests.xml 
+coverage.xml 
+*.cover 
+.hypothesis/ 
+
+# Jupyter Notebook 
+.ipynb_checkpoints 
+
+# pyenv 
+.python-version 
+
+# celery 
+celerybeat-schedule.* 
+
+# SageMath parsed files 
+*.sage.py 
+
+# Environments 
+.env 
+.venv 
+env/ 
+venv/ 
+ENV/ 
+env.bak/ 
+venv.bak/ 
+
+# mkdocs documentation 
+/site 
+
+# mypy 
+.mypy_cache/ 
+
+# Sublime Text # 
+*.tmlanguage.cache 
+*.tmPreferences.cache 
+*.stTheme.cache 
+*.sublime-workspace 
+*.sublime-project 
+
+# sftp configuration file 
+sftp-config.json 
+
+# Package control specific files Package 
+Control.last-run 
+Control.ca-list 
+Control.ca-bundle 
+Control.system-ca-bundle 
+GitHub.sublime-settings 
+
+# Visual Studio Code # 
+.vscode/* 
+!.vscode/settings.json 
+!.vscode/tasks.json 
+!.vscode/launch.json 
+!.vscode/extensions.json 
+.history
+// END OF FILE
+
+---------------------------------------------------------------------------------------------------
+
+add celery to django using docker in separate files (apps for django app , and infrastructure for celery):
+full_backend
+├── backend
+│   ├── apps
+│   ├── core
+    │   ├── __init__.py
+    │   ├── celery.py
+    │   ├── settings.py
+├── infrastructure
+    │   ├── celery
+        │   ├── celery-flower
+            │   ├── Dockerfile
+        │   ├── celery-worker
+        │       ├── Dockerfile
+        │   ├── celery-scheduler
+        │       ├── Dockerfile
+
+
+
+# celery.py
+
+import os
+from celery import Celery
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+
+app = Celery('core')
+app.config_from_object('django.conf:settings', namespace='CELERY')
+app.autodiscover_tasks()
+
+
+add this to django core __init__.py:
+
+from .celery import app as celery_app
+
+__all__ = ['celery_app']
+
+
+# Dockerfile
+FROM pytorch/pytorch:latest
+
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Install required system packages
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    curl \
+    libgl1-mesa-glx \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY ./requirements.txt ./
+RUN pip install --upgrade pip
+RUN pip install --default-timeout=1000 -r requirements.txt
+
+
+COPY . .
+
+# Start Flower
+CMD ["celery", "-A", "core", "flower", "--port=5555", "--loglevel=info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+
+# docker-compose.yml
+
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: authen_backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - mynetwork
+    volumes:
+      - ./backend:/app  # Live code reloading for backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery:
+    build:
+      context: ./backend
+      dockerfile: ../infrastructure/celery/celery-worker/Dockerfile
+    container_name: authen_celery
+    env_file: .env
+    depends_on:
+      - db
+      - redis
+      - backend
+    networks:
+      - mynetwork
+    volumes:
+      - ./backend:/app  # Live code reloading for celery worker
+    command: ["celery", "-A", "core", "worker", "--loglevel=info"]
+
+  celery-flower:
+    build:
+      context: ./backend
+      dockerfile: ../infrastructure/celery/celery-flower/Dockerfile
+    container_name: authen_celery_flower
+    env_file: .env
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - backend
+      - celery
+    networks:
+      - mynetwork
+    volumes:
+      - ./backend:/app  # Live code reloading for celery-flower
+    command: ["celery", "-A", "core", "flower", "--port=5555", "--loglevel=info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+
+  redis:
+    image: redis:6.2
+    container_name: authen_redis
+    networks:
+      - mynetwork
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db:
+    image: postgres:13
+    container_name: authen_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    networks:
+      - mynetwork
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  nginx:
+    image: nginx:latest
+    container_name: authen_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:rw
+    depends_on:
+      - backend
+    networks:
+      - mynetwork
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ../Full_Frontend/Frontend_Naxt
+    container_name: authen_frontend
+    env_file: ../Full_Frontend/Frontend_Naxt/.env.production
+    ports:
+      - "3000:3000"
+    networks:
+      - mynetwork
+    volumes:
+      - ../Full_Frontend/Frontend_Naxt:/app  # Live code reloading for frontend
+
+networks:
+  mynetwork:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+
