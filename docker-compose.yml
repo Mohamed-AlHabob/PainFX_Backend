@@ -67,14 +67,14 @@ services:
       retries: 3
 
   db:
-    image: postgres:13
-    container_name: painfx_db
+    image: postgres:15
+    container_name: painfx_postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     networks:
       - mynetwork
     volumes:
@@ -91,13 +91,13 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:rw
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - backend
     networks:
       - mynetwork
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:80"]
       interval: 30s
       timeout: 10s
       retries: 3

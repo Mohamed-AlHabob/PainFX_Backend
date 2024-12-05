@@ -1,28 +1,29 @@
 -- Check if the database exists and create it if not
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'authen_db') THEN
-        CREATE DATABASE authen_db;
+    IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = current_setting('POSTGRES_DB')) THEN
+        EXECUTE format('CREATE DATABASE %I', current_setting('POSTGRES_DB'));
     END IF;
-END
-$$;
-
--- Connect to the new database
-\c authen_db;
+END $$;
 
 -- Check if the user exists and create it if not
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authen_user') THEN
-        CREATE USER authen_user WITH PASSWORD 'mohamed';
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_setting('POSTGRES_USER')) THEN
+        EXECUTE format('CREATE USER %I WITH PASSWORD %L', current_setting('POSTGRES_USER'), current_setting('POSTGRES_PASSWORD'));
     END IF;
-END
-$$;
+END $$;
 
 -- Set role settings for the user
-ALTER ROLE authen_user SET client_encoding TO 'utf8';
-ALTER ROLE authen_user SET default_transaction_isolation TO 'read committed';
-ALTER ROLE authen_user SET timezone TO 'UTC';
+DO $$
+BEGIN
+    EXECUTE format('ALTER ROLE %I SET client_encoding TO ''utf8''', current_setting('POSTGRES_USER'));
+    EXECUTE format('ALTER ROLE %I SET default_transaction_isolation TO ''read committed''', current_setting('POSTGRES_USER'));
+    EXECUTE format('ALTER ROLE %I SET timezone TO ''UTC''', current_setting('POSTGRES_USER'));
+END $$;
 
 -- Grant all privileges on the database to the user
-GRANT ALL PRIVILEGES ON DATABASE authen_db TO authen_user;
+DO $$
+BEGIN
+    EXECUTE format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', current_setting('POSTGRES_DB'), current_setting('POSTGRES_USER'));
+END $$;

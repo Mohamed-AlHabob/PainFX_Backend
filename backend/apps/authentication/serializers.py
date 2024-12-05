@@ -4,7 +4,7 @@ from apps.authentication.models import User, Patient, Doctor, UserProfile, Speci
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
-        fields = ['id', 'phone_number', 'html_content', 'json_content', 'avatar', 'geolocation']
+        fields = ['id', 'phone_number','address', 'html_content', 'json_content', 'avatar', 'geolocation']
 
 class UserSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(source='userprofile', read_only=True)

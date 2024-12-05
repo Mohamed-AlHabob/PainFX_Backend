@@ -12,7 +12,7 @@ from apps.booking_app.models import (
     UsersAudit,Tag
 )
 from apps.authentication.models import Doctor, User
-from apps.authentication.serializers import DoctorSerializer, UserSerializer
+from apps.authentication.serializers import DoctorSerializer, UserSerializer,PatientSerializer
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
@@ -107,6 +107,7 @@ class ClinicSerializer(serializers.ModelSerializer):
 
 # Reservation Serializer
 class ReservationSerializer(serializers.ModelSerializer):
+    patient = PatientSerializer()
     class Meta:
         model = Reservation
         fields = ['id', 'patient', 'clinic', 'status', 'reason_for_cancellation',
