@@ -19,7 +19,8 @@ class PatientSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Patient
-        fields = ['user', 'medical_history']
+        fields = ['medical_history','user']
+        read_only_fields = ['id',]
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -27,13 +28,19 @@ class PatientSerializer(serializers.ModelSerializer):
         patient = Patient.objects.create(user=user, **validated_data)
         return patient
 
+class SpecializationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Specialization
+        fields = ['id', 'name']
+        
 class DoctorSerializer(serializers.ModelSerializer):
     user = UserSerializer()
-    specialization = serializers.PrimaryKeyRelatedField(queryset=Specialization.objects.all())
+    specialization = SpecializationSerializer()
 
     class Meta:
         model = Doctor
-        fields = ['user', 'specialization', 'reservation_open']
+        fields = ['specialization', 'reservation_open','user']
+        read_only_fields = ['id', 'user']
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')

@@ -1,10 +1,12 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, serializers
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.conf import settings
 import stripe
 from rest_framework.permissions import BasePermission
-
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 # Local imports
 from apps.authentication.models import Doctor, Patient
 from apps.authentication.serializers import (
@@ -30,10 +32,12 @@ from apps.booking_app.tasks import send_sms_notification, send_email_notificatio
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Count
 
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
-class PostPagination(PageNumberPagination):
+class GlPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = 'page_size'
     max_page_size = 100
@@ -53,9 +57,28 @@ class IsClinicOwner(permissions.BasePermission):
 
 # Patient ViewSet
 class PatientViewSet(viewsets.ModelViewSet):
-    queryset = Patient.objects.all()
+    queryset = Patient.objects.none()
     serializer_class = PatientSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsOwner]
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['medical_history']
+    ordering_fields = ['created_at']
+    pagination_class = GlPagination
+
+    def get_queryset(self):
+        return Patient.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        if Patient.objects.filter(user=self.request.user).exists():
+            raise serializers.ValidationError("You already have a patient profile.")
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        patient = self.get_object()
+        patient.is_active = False
+        patient.save()
+        return Response({'status': 'Patient archived'})
 
 # Doctor ViewSet
 class DoctorViewSet(viewsets.ModelViewSet):
@@ -63,12 +86,17 @@ class DoctorViewSet(viewsets.ModelViewSet):
     serializer_class = DoctorSerializer
     permission_classes = [permissions.IsAuthenticated, IsDoctor]
 
+
 # Clinic ViewSet
 class ClinicViewSet(viewsets.ModelViewSet):
     queryset = Clinic.objects.all()
     serializer_class = ClinicSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_create(self, serializer):
+        if Clinic.objects.filter(owner=self.request.user).exists():
+            raise serializers.ValidationError("You already have a patient profile.")
+        serializer.save(owner=self.request.user)
 # Reservation ViewSet
 class ReservationViewSet(viewsets.ModelViewSet):
     queryset = Reservation.objects.select_related('clinic', 'patient__user').prefetch_related('clinic__doctors')
@@ -126,7 +154,7 @@ class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
     permission_classes = [permissions.IsAuthenticated, IsDoctor]
-    pagination_class = PostPagination
+    pagination_class = GlPagination
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
@@ -137,14 +165,14 @@ class PostViewSet(viewsets.ModelViewSet):
         return Response(stats)
     
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        serializer.save(doctor=self.request.user)
     
 # Video ViewSet
 class VideoViewSet(viewsets.ModelViewSet):
     queryset = Video.objects.all()
     serializer_class = VideoSerializer
     permission_classes = [permissions.IsAuthenticated, IsDoctor]
-    pagination_class = PostPagination
+    pagination_class = GlPagination
 
 
 # Comment ViewSet
@@ -152,7 +180,7 @@ class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.none()
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = PostPagination
+    pagination_class = GlPagination
 
     def get_queryset(self):
         post_id = self.request.query_params.get('post_id')
@@ -233,24 +261,43 @@ class UsersAuditViewSet(viewsets.ReadOnlyModelViewSet):
 @csrf_exempt
 def stripe_webhook(request):
     payload = request.body
-    sig_header = request.META['HTTP_STRIPE_SIGNATURE']
-    webhook_secret = settings.STRIPE_WEBHOOK_SECRET
-    event = None
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
 
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, webhook_secret
-        )
-    except ValueError:
-        # Invalid payload
-        return JsonResponse({'status': 'invalid payload'}, status=400)
+        # Verify webhook signature
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+
+        # Handle the payment intent event
+        if event['type'] == 'payment_intent.succeeded':
+            process_payment_webhook.delay(event)
+        elif event['type'] == 'payment_intent.payment_failed':
+            process_payment_webhook.delay(event)
+
+        return JsonResponse({'status': 'success'})
     except stripe.error.SignatureVerificationError:
-        # Invalid signature
-        return JsonResponse({'status': 'invalid signature'}, status=400)
+        return JsonResponse({'error': 'Invalid signature'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
-    # Handle the event
-    if event['type'] in ['payment_intent.succeeded', 'payment_intent.payment_failed']:
-        payment_intent = event['data']['object']
-        process_payment_webhook.delay(payment_intent)
+class CreateStripePaymentIntentView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    return JsonResponse({'status': 'success'}, status=200)
+    def post(self, request, *args, **kwargs):
+        print("Request method:", request.method)
+        print("Request data:", request.data)
+        try:
+            amount = int(request.data.get('amount'))  # Amount in smallest currency unit
+            currency = request.data.get('currency', 'usd')
+
+            # Create a PaymentIntent with the specified amount and currency
+            payment_intent = stripe.PaymentIntent.create(
+                amount=amount,
+                currency=currency,
+                metadata={"user_id": request.user.id},
+            )
+
+            print("Client Secret:", payment_intent['client_secret'])
+            return Response({"client_secret": payment_intent['client_secret']})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)

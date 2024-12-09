@@ -5,11 +5,12 @@ from apps.booking_app.models import Notification, Payment
 from django.core.mail import send_mail
 from twilio.rest import Client
 from django.conf import settings
+from django.utils.timezone import now
 
 # Twilio Configuration
-TWILIO_ACCOUNT_SID = 'your_twilio_account_sid'
-TWILIO_AUTH_TOKEN = 'your_twilio_auth_token'
-TWILIO_FROM_NUMBER = 'your_twilio_number'
+TWILIO_ACCOUNT_SID = settings.TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN = settings.TWILIO_AUTH_TOKEN
+TWILIO_FROM_NUMBER = settings.TWILIO_FROM_NUMBER
 
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
@@ -28,20 +29,27 @@ def send_sms_notification(user_id, message):
     except User.DoesNotExist:
         pass
 
+
 @shared_task
-def process_payment_webhook(payment_intent):
-    # Implement your logic to handle payment events
-    # For example, update Payment model status
-    payment_id = payment_intent.get('id')
-    status = payment_intent.get('status')
-    # Fetch and update Payment model accordingly
-    # This is a simplified example
+def process_payment_webhook(event_data):
     try:
+        # Extract payment intent details
+        payment_intent = event_data['data']['object']
+        payment_id = payment_intent['id']
+        status = payment_intent['status']
+
+        # Fetch and update the Payment model
         payment = Payment.objects.get(payment_intent_id=payment_id)
         payment.payment_status = status
+        payment.last_updated = now()
         payment.save()
+
+        # Log success
+        print(f"Payment {payment_id} processed successfully with status {status}")
     except Payment.DoesNotExist:
-        pass
+        print(f"Payment with intent ID {payment_id} not found.")
+    except Exception as e:
+        print(f"Error processing payment webhook: {str(e)}")
 
 @shared_task
 def send_email_notification(user_email, subject, message):

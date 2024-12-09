@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
-from apps.authentication.models import User, Doctor, Patient
+from apps.authentication.models import Specialization, User, Doctor, Patient
 from apps.authentication.general import GeolocationService
 
 
@@ -53,17 +53,39 @@ class Tag(models.Model):
         return self.name
 
 
-# Clinics and Relationships
+# ---------------------------------------------
+# Tags
+# ---------------------------------------------
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['name'])]
+        verbose_name = "Tag"
+        verbose_name_plural = "Tags"
+
+    def __str__(self):
+        return self.name
+
+
+# ---------------------------------------------
+# Clinics, Branches, and their Doctors
+# ---------------------------------------------
 class Clinic(BaseModel):
     name = models.CharField(max_length=255)
     address = models.CharField(max_length=255, blank=True)
     tags = models.ManyToManyField(Tag, related_name="clinics", blank=True)
+    specialization = models.ForeignKey(Specialization, on_delete=models.SET_NULL, null=True, blank=True)
+    license_number = models.CharField(max_length=255, blank=True, null=True)
+    license_expiry_date = models.DateField(blank=True, null=True)
+    license_image = models.ImageField(upload_to='license_images/', blank=True, null=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_clinics')
     description = models.TextField(blank=True, null=True)
     icon = models.ImageField(upload_to='clinic_icons/', blank=True, null=True)
     privacy = models.BooleanField(default=False)
     reservation_open = models.BooleanField(default=True)
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=False)
     doctors = models.ManyToManyField(Doctor, through='ClinicDoctor', related_name='clinics')
     geolocation = models.JSONField(blank=True, null=True)
 
@@ -79,7 +101,6 @@ class Clinic(BaseModel):
     #     if self.address and not self.geolocation:
     #         self.geolocation = GeolocationService.fetch_coordinates(self.address)
     #     super().save(*args, **kwargs)
-
     def __str__(self):
         return f"Clinic: {self.name} ({self.owner})"
 
@@ -96,8 +117,56 @@ class ClinicDoctor(BaseModel):
 
     def __str__(self):
         return f"{self.doctor} at {self.clinic}"
+    
+# ---------------------------------------------
+# Branches for Clinics
+# ---------------------------------------------
+class Branch(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name='branches')
+    name = models.CharField(max_length=255)
+    address = models.CharField(max_length=255, blank=True)
+    geolocation = models.JSONField(blank=True, null=True)
+    active = models.BooleanField(default=False)
+    reservation_open = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    # Uncomment if you'd like automatic geolocation fetch:
+    # def save(self, *args, **kwargs):
+    #     if self.address and not self.geolocation:
+    #         self.geolocation = GeolocationService.fetch_coordinates(self.address)
+    #     super().save(*args, **kwargs)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['clinic']),
+            models.Index(fields=['reservation_open', 'active']),
+        ]
+        verbose_name = "Branch"
+        verbose_name_plural = "Branches"
+
+    def __str__(self):
+        return f"Branch: {self.name} of {self.clinic.name}"
+
+
+class BranchDoctor(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='branch_doctors')
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='branches_assigned')
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('branch', 'doctor')
+        verbose_name = "Branch-Doctor Relationship"
+        verbose_name_plural = "Branch-Doctor Relationships"
+
+    def __str__(self):
+        return f"{self.doctor} at {self.branch}"
+
+# ---------------------------------------------
 # Reservations
+# ---------------------------------------------
 class Reservation(BaseModel):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='reservations', null=True, blank=True)
     clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name='reservations', null=True, blank=True)
@@ -117,13 +186,12 @@ class Reservation(BaseModel):
         verbose_name_plural = "Reservations"
 
     def save(self, *args, **kwargs):
-        # Ensure either a clinic or a doctor is linked
         if not self.clinic and not self.doctor:
             raise ValidationError('A reservation must be linked to either a clinic or a doctor.')
 
-        # Check if clinic or doctor allows reservations
         if self.clinic and not self.clinic.reservation_open:
             raise ValidationError('Reservations are currently closed for the selected clinic.')
+
         if not self.clinic and self.doctor and not self.doctor.reservation_open:
             raise ValidationError('Reservations are currently closed for the selected doctor.')
 
@@ -132,6 +200,7 @@ class Reservation(BaseModel):
     def __str__(self):
         clinic_info = f" at {self.clinic}" if self.clinic else ""
         return f"Reservation by {self.patient or self.doctor} {clinic_info} on {self.reservation_date}"
+
 
 
 
@@ -145,7 +214,9 @@ class ReservationDoctor(BaseModel):
         return f"{self.doctor} assigned to {self.reservation}"
 
 
+# ---------------------------------------------
 # Reviews
+# ---------------------------------------------
 class Review(BaseModel):
     clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name='reviews')
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='reviews')
@@ -166,9 +237,11 @@ class Review(BaseModel):
     def __str__(self):
         return f"Review by {self.patient} for {self.clinic} - {self.rating} Stars"
 
+# ---------------------------------------------
+# Posts, Videos, Comments, and Likes
+# ---------------------------------------------
 class Post(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    doctor = models.ForeignKey('authentication.Doctor', on_delete=models.CASCADE, related_name='posts')
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='posts')
     title = models.CharField(max_length=255)
     tags = models.ManyToManyField(Tag, related_name="posts", blank=True)
     html_content = models.TextField()
@@ -190,16 +263,15 @@ class Post(BaseModel):
         verbose_name_plural = "Posts"
 
     def clean(self):
-        """Custom validation logic."""
-        if not self.doctor.user:
+        if not self.doctor or not self.doctor.user:
             raise ValidationError('Invalid doctor object associated with the post.')
 
     def __str__(self):
         return f"Post '{self.title}' by {self.doctor.user.get_full_name()} (Type: {self.type})"
 
 
+
 class Video(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     post = models.OneToOneField(Post, on_delete=models.CASCADE)
     video_file = models.FileField(upload_to='videos/')
     video_url = models.URLField(blank=True, null=True)
@@ -214,7 +286,6 @@ class Video(BaseModel):
 
 # Comments and Likes
 class Comment(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     replied = models.BooleanField(default=False)
@@ -231,7 +302,6 @@ class Comment(BaseModel):
 
 
 class Like(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     post = models.ForeignKey(Post, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
@@ -244,51 +314,34 @@ class Like(BaseModel):
 
     def __str__(self):
         return f"{self.user} likes {self.post}"
-
-# Categories and Subscriptions
+    
+# ---------------------------------------------
+# Categories, Subscriptions, and Payments
+# ---------------------------------------------
 class Category(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
 
-class Subscription(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
-    status = models.CharField(max_length=10, choices=SubscriptionStatus.choices, default=SubscriptionStatus.ACTIVE)
-    payment = models.ForeignKey('Payment', on_delete=models.SET_NULL, null=True, blank=True,related_name='subscriptions')
-    
-    class Meta:
-        indexes = [
-            models.Index(fields=['user']),
-        ]
-
-    def __str__(self):
-        return f"{self.user} subscribed to {self.category}"
-
-# Payment Methods
 class PaymentMethod(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     method_name = models.CharField(max_length=255, unique=True)
 
     def __str__(self):
         return self.method_name
 
-# Payments
+
 class Payment(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    method = models.ForeignKey('PaymentMethod', on_delete=models.CASCADE)
+    method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE)
     payment_status = models.CharField(max_length=10, choices=PaymentStatus.choices)
     related_object = models.ForeignKey(
-        'Reservation', 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
+        'Reservation',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='payments'
     )
 
@@ -300,10 +353,25 @@ class Payment(BaseModel):
     def clean(self):
         if not self.related_object:
             raise ValidationError('Payment must be linked to a reservation.')
+        
+class Subscription(BaseModel):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    status = models.CharField(max_length=10, choices=SubscriptionStatus.choices, default=SubscriptionStatus.ACTIVE)
+    payment = models.ForeignKey(Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name='subscriptions')
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['user']),
+        ]
+
+    def __str__(self):
+        return f"{self.user} subscribed to {self.category}"
+
+# ---------------------------------------------
 # Notifications
+# ---------------------------------------------
 class Notification(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     message = models.TextField()
     is_read = models.BooleanField(default=False)
@@ -311,9 +379,11 @@ class Notification(BaseModel):
     def __str__(self):
         return f"Notification for {self.user}"
 
+
+# ---------------------------------------------
 # Event Schedules
+# ---------------------------------------------
 class EventSchedule(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE)
     doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True)
     event_name = models.CharField(max_length=255)
@@ -328,9 +398,10 @@ class EventSchedule(BaseModel):
     def __str__(self):
         return f"Event {self.event_name} at {self.clinic}"
 
+# ---------------------------------------------
 # Advertising Campaigns
+# ---------------------------------------------
 class AdvertisingCampaign(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE)
     campaign_name = models.CharField(max_length=255)
     start_date = models.DateField()
@@ -345,9 +416,10 @@ class AdvertisingCampaign(BaseModel):
     def __str__(self):
         return f"Campaign {self.campaign_name} for {self.clinic}"
 
+# ---------------------------------------------
 # Users Audit Trail
+# ---------------------------------------------
 class UsersAudit(BaseModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     changed_data = models.JSONField()
     changed_at = models.DateTimeField(auto_now_add=True)

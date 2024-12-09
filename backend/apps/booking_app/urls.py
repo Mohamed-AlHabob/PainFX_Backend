@@ -4,7 +4,7 @@ from django.urls import path, include
 from rest_framework import routers
 
 from apps.booking_app.views import (
-    PatientViewSet, DoctorViewSet,
+    CreateStripePaymentIntentView, PatientViewSet, DoctorViewSet,
     ClinicViewSet, ReservationViewSet, ReviewViewSet, PostViewSet,
     VideoViewSet, CommentViewSet, LikeViewSet, CategoryViewSet,
     SubscriptionViewSet, PaymentMethodViewSet, PaymentViewSet,
@@ -34,4 +34,5 @@ router.register(r'users-audit', UsersAuditViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('webhooks/stripe/', stripe_webhook, name='stripe_webhook'),
+    path('payments/create-stripe-intent/', CreateStripePaymentIntentView.as_view(), name='create-stripe-intent'),
 ]

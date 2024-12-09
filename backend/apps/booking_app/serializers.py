@@ -12,107 +12,41 @@ from apps.booking_app.models import (
     UsersAudit,Tag
 )
 from apps.authentication.models import Doctor, User
-from apps.authentication.serializers import DoctorSerializer, UserSerializer,PatientSerializer
+from apps.authentication.serializers import DoctorSerializer, UserSerializer,PatientSerializer,SpecializationSerializer
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
-        fields = ['id', 'name', 'created_at']
+        fields = ['name']
+        read_only_fields = ['id', 'created_at']
 
 # Clinic Serializer
 class ClinicSerializer(serializers.ModelSerializer):
     owner = UserSerializer()
     doctors = DoctorSerializer(many=True)
-
+    specialization = SpecializationSerializer()
     class Meta:
         model = Clinic
-        fields = (
-            'id',
-            'name',
-            'address',
-            'owner',
-            'doctors',
-            'created_at',
-            'updated_at',
-            'geolocation',
-        )
+        fields = ['id','name', 'address','doctors','owner','specialization', 'description','reservation_open','privacy','active','license_number','license_expiry_date']
+        wirte_only_fields= ['id','owner','doctors', 'created_at', 'updated_at']
 
-    def create(self, validated_data):
-        owner_data = validated_data.pop('owner')
-        doctors_data = validated_data.pop('doctors')
+    # def create(self, validated_data):
+    #     doctors = validated_data.pop('doctors', [])
+    #     clinic = Clinic.objects.create(**validated_data)
+    #     clinic.doctors.set(doctors)  # Assign ManyToManyField
+    #     return clinic
 
-        # Create or get the owner user
-        owner, _ = User.objects.get_or_create(
-            email=owner_data.get('email'),
-            defaults={
-                'first_name': owner_data.get('first_name'),
-                'last_name': owner_data.get('last_name'),
-                'role': owner_data.get('role', 'admin'),
-            }
-        )
-
-        clinic = Clinic.objects.create(owner=owner, **validated_data)
-
-        # Handle the ManyToMany relationship with doctors
-        for doctor_data in doctors_data:
-            user_data = doctor_data.pop('user')
-            doctor_user, _ = User.objects.get_or_create(
-                email=user_data.get('email'),
-                defaults={
-                    'first_name': user_data.get('first_name'),
-                    'last_name': user_data.get('last_name'),
-                    'role': user_data.get('role', 'doctor'),
-                }
-            )
-            doctor, _ = Doctor.objects.get_or_create(user=doctor_user, **doctor_data)
-            ClinicDoctor.objects.get_or_create(clinic=clinic, doctor=doctor)
-
-        return clinic
-
-    def update(self, instance, validated_data):
-        owner_data = validated_data.pop('owner', None)
-        doctors_data = validated_data.pop('doctors', None)
-
-        # Update clinic fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        # Update owner information if provided
-        if owner_data:
-            owner = instance.owner
-            for attr, value in owner_data.items():
-                setattr(owner, attr, value)
-            owner.save()
-
-        # Update doctors if provided
-        if doctors_data:
-            # Clear existing relationships
-            instance.doctors.clear()
-            for doctor_data in doctors_data:
-                user_data = doctor_data.pop('user')
-                doctor_user, _ = User.objects.get_or_create(
-                    email=user_data.get('email'),
-                    defaults={
-                        'first_name': user_data.get('first_name'),
-                        'last_name': user_data.get('last_name'),
-                        'role': user_data.get('role', 'doctor'),
-                    }
-                )
-                doctor, _ = Doctor.objects.get_or_create(user=doctor_user, **doctor_data)
-                ClinicDoctor.objects.get_or_create(clinic=instance, doctor=doctor)
-
-        return instance
 
 
 # Reservation Serializer
 class ReservationSerializer(serializers.ModelSerializer):
     patient = PatientSerializer()
+    doctor = DoctorSerializer()
     class Meta:
         model = Reservation
-        fields = ['id', 'patient', 'clinic', 'status', 'reason_for_cancellation',
-                  'reservation_date', 'reservation_time', 'created_at', 'updated_at']
-
+        fields = ['id', 'clinic', 'status','doctor','patient', 'reason_for_cancellation',
+                  'reservation_date', 'reservation_time']
+        writ_only_fields = [ 'created_at', 'updated_at']
     def validate(self, attrs):
         if attrs.get('created_at') and attrs.get('updated_at') and attrs['created_at'] > attrs['updated_at']:
             raise serializers.ValidationError("created_at must be before or equal to updated_at")
@@ -122,7 +56,8 @@ class ReservationSerializer(serializers.ModelSerializer):
 class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
-        fields = ['id', 'clinic', 'patient', 'rating', 'review_text', 'created_at']
+        fields = ['clinic', 'rating', 'review_text']
+        read_only_fields = ['id', 'patient', 'created_at']
 
     def validate(self, attrs):
         patient = attrs.get('patient')
@@ -140,7 +75,8 @@ class PostSerializer(serializers.ModelSerializer):
     doctor = DoctorSerializer()
     class Meta:
         model = Post
-        fields = ['id', 'doctor','title','html_content','json_content', 'content', 'type', 'created_at', 'updated_at']
+        fields = ['id','title','html_content','json_content', 'content', 'type', 'doctor']
+        read_only_fields = ['id', 'doctor', 'created_at', 'updated_at']
 
     def validate(self, attrs):
         doctor = attrs.get('doctor')
@@ -153,7 +89,8 @@ class VideoSerializer(serializers.ModelSerializer):
     post = PostSerializer()
     class Meta:
         model = Video
-        fields = ['id', 'post','video_file', 'video_url', 'thumbnail_url']
+        fields = [ 'id','post','video_file', 'video_url', 'thumbnail_url']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate(self, attrs):
         post = attrs.get('post')
@@ -165,13 +102,16 @@ class VideoSerializer(serializers.ModelSerializer):
 class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
-        fields = ['id', 'post', 'user', 'comment_text', 'parent_comment', 'created_at']
+        fields = ['post',  'comment_text', 'parent_comment']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+        
 
 # Like Serializer
 class LikeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Like
-        fields = ['id', 'post', 'user', 'created_at']
+        fields = ['id', 'post']
+        read_only_fields = [ 'user', 'created_at']
 
 # Category Serializer
 class CategorySerializer(serializers.ModelSerializer):
@@ -183,7 +123,8 @@ class CategorySerializer(serializers.ModelSerializer):
 class SubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
-        fields = ['id', 'user', 'category', 'status', 'payment', 'created_at', 'updated_at']
+        fields = [ 'category', 'status', 'payment']
+        read_only_fields = ['id','user', 'created_at', 'updated_at']
 
 # PaymentMethod Serializer
 class PaymentMethodSerializer(serializers.ModelSerializer):

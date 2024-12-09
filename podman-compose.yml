@@ -14,7 +14,7 @@ services:
     networks:
       - mynetwork
     volumes:
-      - ./backend:/app  # Live code reloading for backend
+      - ./backend:/app:z  # Add :z for SELinux environments
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
       interval: 30s
@@ -34,7 +34,7 @@ services:
     networks:
       - mynetwork
     volumes:
-      - ./backend:/app  # Live code reloading for celery worker
+      - ./backend:/app:z  # Add :z for SELinux environments
     command: ["celery", "-A", "core", "worker", "--loglevel=info"]
 
   celery-flower:
@@ -52,7 +52,7 @@ services:
     networks:
       - mynetwork
     volumes:
-      - ./backend:/app  # Live code reloading for celery-flower
+      - ./backend:/app:z  # Add :z for SELinux environments
     command: ["celery", "-A", "core", "flower", "--port=5555", "--loglevel=info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
 
   redis:
@@ -78,12 +78,7 @@ services:
     networks:
       - mynetwork
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    # healthcheck:
-    #   test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 5
+      - postgres_data:/var/lib/postgresql/data:z  # Add :z for SELinux environments
 
   nginx:
     image: nginx:latest
@@ -91,7 +86,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro,z  # Add :z for SELinux environments
     depends_on:
       - backend
     networks:
