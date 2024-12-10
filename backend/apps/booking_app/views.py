@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions, serializers
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
+from django.contrib.gis.db.models.functions import Distance
 from django.http import JsonResponse
 from django.conf import settings
 import stripe
@@ -42,18 +42,21 @@ class GlPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 100
 
-# Permissions
 class IsOwner(BasePermission):
     def has_object_permission(self, request, view, obj):
-        return obj.owner == request.user
-    
-class IsDoctor(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return hasattr(request.user, 'doctor')
+        return obj.user == request.user
 
-class IsClinicOwner(permissions.BasePermission):
+class IsDoctor(BasePermission):
     def has_permission(self, request, view):
-        return hasattr(request.user, 'clinicowner')
+        return request.user.is_authenticated and request.user.role == 'doctor'
+
+class IsClinicOwner(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'clinic'
+
+class IsPatient(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'patient'
 
 # Patient ViewSet
 class PatientViewSet(viewsets.ModelViewSet):
@@ -76,32 +79,68 @@ class PatientViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def archive(self, request, pk=None):
         patient = self.get_object()
-        patient.is_active = False
-        patient.save()
+        # Deactivate the user associated with this patient
+        patient.user.is_active = False
+        patient.user.save()
         return Response({'status': 'Patient archived'})
+
 
 # Doctor ViewSet
 class DoctorViewSet(viewsets.ModelViewSet):
-    queryset = Doctor.objects.all()
+    queryset = Doctor.objects.none()
     serializer_class = DoctorSerializer
     permission_classes = [permissions.IsAuthenticated, IsDoctor]
+    pagination_class = GlPagination
+
+    def get_queryset(self):
+        return Doctor.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 
 
 # Clinic ViewSet
 class ClinicViewSet(viewsets.ModelViewSet):
-    queryset = Clinic.objects.all()
+    queryset = Clinic.objects.none()
     serializer_class = ClinicSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = GlPagination
+
+    def get_queryset(self):
+        user = self.request.user
+        # Check if the user has a profile and a valid location point
+        if hasattr(user, 'profile') and user.profile.location:
+            user_location = user.profile.location
+            return Clinic.objects.filter(active=True).annotate(
+                distance=Distance('location', user_location)
+            ).order_by('distance')
+        else:
+            # If no user location, just return active clinics ordered by name
+            return Clinic.objects.filter(active=True).order_by('name')
 
     def perform_create(self, serializer):
         if Clinic.objects.filter(owner=self.request.user).exists():
-            raise serializers.ValidationError("You already have a patient profile.")
+            raise serializers.ValidationError("You already own a clinic.")
         serializer.save(owner=self.request.user)
+
+
 # Reservation ViewSet
 class ReservationViewSet(viewsets.ModelViewSet):
-    queryset = Reservation.objects.select_related('clinic', 'patient__user').prefetch_related('clinic__doctors')
+    queryset = Reservation.objects.none()
     serializer_class = ReservationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = GlPagination
+
+    def get_queryset(self):
+        user = self.request.user
+        if hasattr(user, 'clinicowner'):
+            return Reservation.objects.filter(clinic__owner=user)
+        elif hasattr(user, 'doctor'):
+            return Reservation.objects.filter(doctor__user=user)
+        elif hasattr(user, 'patient'):
+            return Reservation.objects.filter(patient__user=user)
+        return Reservation.objects.none()
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsClinicOwner])
     def approve(self, request, pk=None):
@@ -113,13 +152,13 @@ class ReservationViewSet(viewsets.ModelViewSet):
         reservation.save()
 
         # Assign a doctor
-        assigned_doctor = reservation.clinic.doctors.first()
+        assigned_doctor = reservation.clinic.doctors.filter(reservation_open=True).first()
         if not assigned_doctor:
-            return Response({'error': 'No doctors available'}, status=400)
+            return Response({'error': 'No available doctors'}, status=400)
 
         ReservationDoctor.objects.create(reservation=reservation, doctor=assigned_doctor)
 
-        # Send notifications
+        # Send notifications asynchronously
         send_sms_notification.delay(reservation.patient.user.id, 'Your reservation has been approved.')
         send_email_notification.delay(
             reservation.patient.user.email,
@@ -128,13 +167,13 @@ class ReservationViewSet(viewsets.ModelViewSet):
         )
         return Response({'status': 'Reservation approved'})
 
-
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsClinicOwner])
     def reject(self, request, pk=None):
         reservation = self.get_object()
         reservation.status = ReservationStatus.REJECTED
         reservation.reason_for_cancellation = request.data.get('reason', '')
         reservation.save()
+
         # Send notifications asynchronously
         send_sms_notification.delay(reservation.patient.user.id, 'Your reservation has been rejected.')
         send_email_notification.delay(
@@ -143,6 +182,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
             f'Your reservation has been rejected. Reason: {reservation.reason_for_cancellation}'
         )
         return Response({'status': 'Reservation rejected'})
+
 # Review ViewSet
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all()
@@ -165,7 +205,10 @@ class PostViewSet(viewsets.ModelViewSet):
         return Response(stats)
     
     def perform_create(self, serializer):
-        serializer.save(doctor=self.request.user)
+        # Link post to the doctor's instance, not just the user
+        if not hasattr(self.request.user, 'doctor'):
+            raise serializers.ValidationError("Only doctors can create posts.")
+        serializer.save(doctor=self.request.user.doctor)
     
 # Video ViewSet
 class VideoViewSet(viewsets.ModelViewSet):
@@ -264,40 +307,41 @@ def stripe_webhook(request):
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
 
+    if not payload or not sig_header:
+        return JsonResponse({'error': 'Missing payload or signature'}, status=400)
+
     try:
-        # Verify webhook signature
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
 
-        # Handle the payment intent event
         if event['type'] == 'payment_intent.succeeded':
-            process_payment_webhook.delay(event)
+            process_payment_webhook.delay(event['data']['object'])
         elif event['type'] == 'payment_intent.payment_failed':
-            process_payment_webhook.delay(event)
+            process_payment_webhook.delay(event['data']['object'])
 
         return JsonResponse({'status': 'success'})
     except stripe.error.SignatureVerificationError:
         return JsonResponse({'error': 'Invalid signature'}, status=400)
     except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Stripe webhook error: {str(e)}")
         return JsonResponse({'error': str(e)}, status=400)
+
 
 class CreateStripePaymentIntentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        print("Request method:", request.method)
-        print("Request data:", request.data)
         try:
-            amount = int(request.data.get('amount'))  # Amount in smallest currency unit
+            amount = int(request.data.get('amount'))
             currency = request.data.get('currency', 'usd')
 
-            # Create a PaymentIntent with the specified amount and currency
             payment_intent = stripe.PaymentIntent.create(
                 amount=amount,
                 currency=currency,
                 metadata={"user_id": request.user.id},
             )
 
-            print("Client Secret:", payment_intent['client_secret'])
             return Response({"client_secret": payment_intent['client_secret']})
         except Exception as e:
             return Response({"error": str(e)}, status=400)

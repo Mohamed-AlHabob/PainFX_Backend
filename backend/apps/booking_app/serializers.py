@@ -28,7 +28,7 @@ class ClinicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Clinic
         fields = ['id','name', 'address','doctors','owner','specialization', 'description','reservation_open','privacy','active','license_number','license_expiry_date']
-        wirte_only_fields= ['id','owner','doctors', 'created_at', 'updated_at']
+        write_only_fields= ['id','owner','doctors', 'created_at', 'updated_at']
 
     # def create(self, validated_data):
     #     doctors = validated_data.pop('doctors', [])

@@ -14,42 +14,55 @@ TWILIO_FROM_NUMBER = settings.TWILIO_FROM_NUMBER
 
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
-@shared_task
-def send_sms_notification(user_id, message):
+@shared_task(bind=True, max_retries=3)
+def send_sms_notification(self, user_id, message):
     from .models import User
+    import logging
+    logger = logging.getLogger(__name__)
     try:
         user = User.objects.get(id=user_id)
-        # Assume User model has a phone_number field
-        phone_number = user.profile.phone_number  # Adjust as per your UserProfile
+        phone_number = user.profile.phone_number
+        if not phone_number:
+            logger.warning(f"User {user_id} does not have a valid phone number.")
+            return
+
         twilio_client.messages.create(
             body=message,
             from_=TWILIO_FROM_NUMBER,
             to=phone_number
         )
+        logger.info(f"SMS sent to {phone_number} for User {user_id}.")
     except User.DoesNotExist:
-        pass
+        logger.error(f"User with ID {user_id} does not exist.")
+    except Exception as e:
+        logger.error(f"Error sending SMS to User {user_id}: {str(e)}")
+        self.retry(exc=e, countdown=60)
 
 
-@shared_task
-def process_payment_webhook(event_data):
+
+@shared_task(bind=True, max_retries=3)
+def process_payment_webhook(self, event_data):
+    import logging
+    logger = logging.getLogger(__name__)
     try:
-        # Extract payment intent details
         payment_intent = event_data['data']['object']
-        payment_id = payment_intent['id']
-        status = payment_intent['status']
+        payment_id = payment_intent.get('id')
+        status = payment_intent.get('status')
 
-        # Fetch and update the Payment model
+        if not payment_id or not status:
+            raise ValueError("Invalid event data: missing payment ID or status.")
+
         payment = Payment.objects.get(payment_intent_id=payment_id)
         payment.payment_status = status
         payment.last_updated = now()
         payment.save()
-
-        # Log success
-        print(f"Payment {payment_id} processed successfully with status {status}")
+        logger.info(f"Payment {payment_id} processed successfully with status {status}.")
     except Payment.DoesNotExist:
-        print(f"Payment with intent ID {payment_id} not found.")
+        logger.error(f"Payment with intent ID {payment_id} not found.")
     except Exception as e:
-        print(f"Error processing payment webhook: {str(e)}")
+        logger.error(f"Error processing payment webhook: {str(e)}")
+        self.retry(exc=e, countdown=60)
+
 
 @shared_task
 def send_email_notification(user_email, subject, message):
