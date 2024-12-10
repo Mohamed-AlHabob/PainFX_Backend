@@ -1,5 +1,6 @@
 from rest_framework import viewsets, permissions, serializers
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.gis.geos import Point
 from django.contrib.gis.db.models.functions import Distance
 from django.http import JsonResponse
 from django.conf import settings
@@ -109,9 +110,10 @@ class ClinicViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Check if the user has a profile and a valid location point
-        if hasattr(user, 'profile') and user.profile.location:
-            user_location = user.profile.location
+        
+        # Check if the user has a profile and valid latitude/longitude
+        if hasattr(user, 'profile') and user.profile.latitude and user.profile.longitude:
+            user_location = Point(user.profile.longitude, user.profile.latitude, srid=4326)
             return Clinic.objects.filter(active=True).annotate(
                 distance=Distance('location', user_location)
             ).order_by('distance')
@@ -120,8 +122,10 @@ class ClinicViewSet(viewsets.ModelViewSet):
             return Clinic.objects.filter(active=True).order_by('name')
 
     def perform_create(self, serializer):
+        # Ensure a user can own only one clinic
         if Clinic.objects.filter(owner=self.request.user).exists():
-            raise serializers.ValidationError("You already own a clinic.")
+            raise serializers.ValidationError({"error": "You already own a clinic."})
+        
         serializer.save(owner=self.request.user)
 
 

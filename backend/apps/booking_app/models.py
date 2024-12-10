@@ -4,7 +4,6 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from apps.authentication.models import Specialization, User, Doctor, Patient
 from apps.general import GeolocationService
-from django.contrib.gis.db import models as gis_models
 
 # Abstract Base Model
 class BaseModel(models.Model):
@@ -75,7 +74,8 @@ class Tag(models.Model):
 class Clinic(BaseModel):
     name = models.CharField(max_length=255)
     address = models.CharField(max_length=255, blank=True)
-    location = gis_models.PointField(blank=True, null=True)
+    latitude = models.FloatField(blank=True, null=True)
+    longitude = models.FloatField(blank=True, null=True)
     tags = models.ManyToManyField(Tag, related_name="clinics", blank=True)
     specialization = models.ForeignKey(Specialization, on_delete=models.SET_NULL, null=True, blank=True)
     license_number = models.CharField(max_length=255, blank=True, null=True)

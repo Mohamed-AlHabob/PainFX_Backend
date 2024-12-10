@@ -1,23 +1,19 @@
-# Use a specific Python version
+# Use a specific Python version for consistency
 FROM python:3.12-slim
 
 # Set the working directory
 WORKDIR /app
 
-# Install system dependencies for PostGIS and GeoDjango
+# Install system dependencies for GDAL and other required tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gdal-bin \
     libgdal-dev \
-    postgresql \
-    postgresql-contrib \
-    postgresql-12-postgis-3 \
-    libpq-dev \
     gcc \
     python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables for GDAL
+# Set environment variables for GDAL (to locate shared libraries and include files)
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
 

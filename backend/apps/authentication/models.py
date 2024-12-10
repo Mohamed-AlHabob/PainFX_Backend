@@ -4,7 +4,6 @@ from django.db import models
 from django.db.models import Q
 from django.core.validators import RegexValidator
 from apps.general import GeolocationService
-from django.contrib.gis.db import models as gis_models
 # User Management and Authentication
 class UserManager(BaseUserManager):
     def get_queryset(self):
@@ -83,7 +82,8 @@ class UserProfile(models.Model):
     avatar = models.ImageField(upload_to="avatars/", null=True, blank=True, default="avatars/default.png")
     bio = models.TextField(blank=True, null=True)
     address = models.CharField(max_length=255, blank=True, null=True)
-    location = gis_models.PointField(blank=True, null=True)
+    latitude = models.FloatField(blank=True, null=True)
+    longitude = models.FloatField(blank=True, null=True)
     phone_number = models.CharField(
         max_length=15,
         blank=True,
