@@ -92,6 +92,7 @@ class UserProfile(models.Model):
     )
     html_content = models.TextField(blank=True, null=True)
     json_content = models.JSONField(blank=True, null=True)
+    gander = models.CharField(max_length=10, choices=[("male", "Male"), ("female", "Female"), ("other", "Other")], blank=True, null=True)
     # geolocation = models.CharField(max_length=255, blank=True, null=True)
 
     # def save(self, *args, **kwargs):

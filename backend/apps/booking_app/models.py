@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from apps.authentication.models import Specialization, User, Doctor, Patient
 from apps.general import GeolocationService
-
+import json
 # Abstract Base Model
 class BaseModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -21,9 +21,9 @@ class ReservationStatus(models.TextChoices):
     REJECTED = 'rejected', 'Rejected'
     CANCELLED = 'cancelled', 'Cancelled'
 
-class PostType(models.TextChoices):
-    TEXT = 'text', 'Text'
-    VIDEO = 'video', 'Video'
+# class PostType(models.TextChoices):
+#     TEXT = 'text', 'Text'
+#     VIDEO = 'video', 'Video'
 
 class SubscriptionStatus(models.TextChoices):
     ACTIVE = 'active', 'Active'
@@ -171,7 +171,7 @@ class BranchDoctor(models.Model):
 class Reservation(BaseModel):
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='reservations', null=True, blank=True)
     clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name='reservations', null=True, blank=True)
-    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='reservations')
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='reservations',null=True, blank=True)
     status = models.CharField(max_length=10, choices=ReservationStatus.choices, default=ReservationStatus.PENDING)
     reason_for_cancellation = models.TextField(blank=True, null=True)
     reservation_date = models.DateField()
@@ -245,45 +245,36 @@ class Post(BaseModel):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='posts')
     title = models.CharField(max_length=255)
     tags = models.ManyToManyField(Tag, related_name="posts", blank=True)
-    html_content = models.TextField()
-    json_content = models.TextField()
-    content = models.TextField()
-    type = models.CharField(max_length=5, choices=PostType.choices)
+    video_file = models.FileField(upload_to='videos/',blank=True, null=True)
+    video_url = models.URLField(blank=True, null=True)
+    thumbnail_url = models.URLField(blank=True, null=True)
+    content = models.TextField(blank=True, null=True)
+    # type = models.CharField(max_length=5, choices=PostType.choices)
 
     class Meta:
         indexes = [
             models.Index(fields=['doctor'], name='idx_posts_doctor_id'),
         ]
-        constraints = [
-            models.CheckConstraint(
-                check=models.Q(type__in=[choice[0] for choice in PostType.choices]),
-                name="valid_post_type"
-            ),
-        ]
         verbose_name = "Post"
         verbose_name_plural = "Posts"
 
-    def clean(self):
-        if not self.doctor or not self.doctor.user:
-            raise ValidationError('Invalid doctor object associated with the post.')
-
     def __str__(self):
-        return f"Post '{self.title}' by {self.doctor.user.get_full_name()} (Type: {self.type})"
+        return f"Post '{self.title}' by {self.doctor.user.get_full_name()}"
 
+# class Video(BaseModel):
+#     post = models.OneToOneField(Post, on_delete=models.CASCADE)
+#     video_file = models.FileField(upload_to='videos/',blank=True, null=True)
+#     video_url = models.URLField(blank=True, null=True)
+#     thumbnail_url = models.URLField(blank=True, null=True)
 
+#     def clean(self):
+#         if self.post.type != PostType.VIDEO:
+#             raise ValidationError('Post type must be video.')
+#         if not self.video_file and not self.video_url:
+#             raise ValidationError('Either video_file or video_url must be provided.')
 
-class Video(BaseModel):
-    post = models.OneToOneField(Post, on_delete=models.CASCADE)
-    video_file = models.FileField(upload_to='videos/')
-    video_url = models.URLField(blank=True, null=True)
-    thumbnail_url = models.URLField(blank=True, null=True)
-
-    def clean(self):
-        if self.post.type != PostType.VIDEO:
-            raise ValidationError('Post type must be video')
-
-    def __str__(self):
-        return f"Video for {self.post}"
+#     def __str__(self):
+#         return f"Video for {self.post}"
 
 # Comments and Likes
 class Comment(BaseModel):

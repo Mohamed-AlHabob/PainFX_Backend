@@ -3,15 +3,13 @@
 from rest_framework import serializers
 from apps.booking_app.models import (
     Clinic,
-    ClinicDoctor,
-    PostType,
     Reservation,
-    ReservationStatus, Review, Post, Video,
+    ReservationStatus, Review, Post,
     Comment, Like, Category, Subscription, PaymentMethod,
     Payment, Notification, EventSchedule, AdvertisingCampaign,
     UsersAudit,Tag
 )
-from apps.authentication.models import Doctor, User
+
 from apps.authentication.serializers import DoctorSerializer, UserSerializer,PatientSerializer,SpecializationSerializer
 
 class TagSerializer(serializers.ModelSerializer):
@@ -27,30 +25,27 @@ class ClinicSerializer(serializers.ModelSerializer):
     specialization = SpecializationSerializer()
     class Meta:
         model = Clinic
-        fields = ['id','name', 'address','doctors','owner','specialization', 'description','reservation_open','privacy','active','license_number','license_expiry_date']
-        write_only_fields= ['id','owner','doctors', 'created_at', 'updated_at']
-
-    # def create(self, validated_data):
-    #     doctors = validated_data.pop('doctors', [])
-    #     clinic = Clinic.objects.create(**validated_data)
-    #     clinic.doctors.set(doctors)  # Assign ManyToManyField
-    #     return clinic
+        fields = ['id','name', 'address','doctors','icon','owner','specialization', 'description','reservation_open','privacy','active','license_number','license_expiry_date','created_at', 'updated_at']
+        write_only_fields= ['id','owner','doctors']
 
 
-
-# Reservation Serializer
 class ReservationSerializer(serializers.ModelSerializer):
-    patient = PatientSerializer()
-    doctor = DoctorSerializer()
+    patient = PatientSerializer(read_only=True)
+
     class Meta:
         model = Reservation
-        fields = ['id', 'clinic', 'status','doctor','patient', 'reason_for_cancellation',
-                  'reservation_date', 'reservation_time']
-        writ_only_fields = [ 'created_at', 'updated_at']
-    def validate(self, attrs):
-        if attrs.get('created_at') and attrs.get('updated_at') and attrs['created_at'] > attrs['updated_at']:
-            raise serializers.ValidationError("created_at must be before or equal to updated_at")
-        return attrs
+        fields = ['id','clinic','status','reason_for_cancellation','reservation_date','reservation_time','patient','doctor']
+
+    def create(self, validated_data):
+        """
+        Override the create method to set the patient field to the current user.
+        """
+        user = self.context['request'].user
+        if not hasattr(user, 'patient'):
+            raise serializers.ValidationError("Only patients can create reservations.")
+        # Add the patient instance to the validated data
+        validated_data['patient'] = user.patient
+        return super().create(validated_data)
 
 # Review Serializer
 class ReviewSerializer(serializers.ModelSerializer):
@@ -69,34 +64,41 @@ class ReviewSerializer(serializers.ModelSerializer):
         ).exists():
             raise serializers.ValidationError('Patient must have an approved reservation at the clinic to leave a review')
         return attrs
+    
+# # Video Serializer
+# class VideoSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Video
+#         fields = ['id', 'video_file', 'video_url', 'thumbnail_url']
+#         read_only_fields = ['id', 'video_url', 'thumbnail_url']
+
+#     def validate(self, attrs):
+#         post = attrs.get('post')
+#         if post.type != PostType.VIDEO:
+#             raise serializers.ValidationError('Post type must be VIDEO to attach a video.')
+#         return attrs
 
 # Post Serializer
 class PostSerializer(serializers.ModelSerializer):
-    doctor = DoctorSerializer()
+    doctor = DoctorSerializer(read_only=True)
+    likes_count = serializers.IntegerField(read_only=True)
+    comments_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Post
-        fields = ['id','title','html_content','json_content', 'content', 'type', 'doctor']
-        read_only_fields = ['id', 'doctor', 'created_at', 'updated_at']
+        fields = [
+            'id', 'title', 'video_file', 'video_url','thumbnail_url', 'content',
+            'doctor', 'likes_count', 'comments_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'doctor', 'likes_count', 'comments_count', 'created_at', 'updated_at']
 
-    def validate(self, attrs):
-        doctor = attrs.get('doctor')
-        if not Doctor.objects.filter(user=doctor.user).exists():
-            raise serializers.ValidationError('Only doctors can create posts')
-        return attrs
-
-# Video Serializer
-class VideoSerializer(serializers.ModelSerializer):
-    post = PostSerializer()
-    class Meta:
-        model = Video
-        fields = [ 'id','post','video_file', 'video_url', 'thumbnail_url']
-        read_only_fields = ['id', 'created_at', 'updated_at']
-
-    def validate(self, attrs):
-        post = attrs.get('post')
-        if post.type != PostType.VIDEO:
-            raise serializers.ValidationError('Post type must be video')
-        return attrs
+    def create(self, validated_data):
+        user = self.context['request'].user
+        if not hasattr(user, 'doctor'):
+            raise serializers.ValidationError("Only doctors can create posts.")
+        validated_data['doctor'] = user.doctor
+        return super().create(validated_data)
 
 # Comment Serializer
 class CommentSerializer(serializers.ModelSerializer):
@@ -108,10 +110,10 @@ class CommentSerializer(serializers.ModelSerializer):
 
 # Like Serializer
 class LikeSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
     class Meta:
         model = Like
-        fields = ['id', 'post']
-        read_only_fields = [ 'user', 'created_at']
+        fields = ['id', 'post','user', 'created_at', 'updated_at']
 
 # Category Serializer
 class CategorySerializer(serializers.ModelSerializer):

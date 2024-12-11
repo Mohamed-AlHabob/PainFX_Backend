@@ -6,7 +6,7 @@ from rest_framework import routers
 from apps.booking_app.views import (
     CreateStripePaymentIntentView, PatientViewSet, DoctorViewSet,
     ClinicViewSet, ReservationViewSet, ReviewViewSet, PostViewSet,
-    VideoViewSet, CommentViewSet, LikeViewSet, CategoryViewSet,
+     CommentViewSet, LikeViewSet, CategoryViewSet,
     SubscriptionViewSet, PaymentMethodViewSet, PaymentViewSet,
     NotificationViewSet, EventScheduleViewSet, AdvertisingCampaignViewSet,
     UsersAuditViewSet, stripe_webhook
@@ -19,7 +19,7 @@ router.register(r'clinics', ClinicViewSet)
 router.register(r'reservations', ReservationViewSet)
 router.register(r'reviews', ReviewViewSet)
 router.register(r'posts', PostViewSet)
-router.register(r'videos', VideoViewSet)
+# router.register(r'videos', VideoViewSet)
 router.register(r'comments', CommentViewSet)
 router.register(r'likes', LikeViewSet)
 router.register(r'categories', CategoryViewSet)
