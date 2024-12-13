@@ -238,19 +238,26 @@ if not DEVELOPMENTMODE:
 # Logging settings
 if not DEBUG:
     LOGGING = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "handlers": {
-            "directlogging": {
-                "level": "WARNING",
-                "class": "django_project.logging_handler.DirectWriteLoggingHandler",
-            },
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
         },
-        "loggers": {
-            "root": {
-                "handlers": ["directlogging"],
-                "level": "WARNING",
-                "propagate": True,
-            },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs/django.log',
         },
-    }
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
