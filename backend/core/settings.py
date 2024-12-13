@@ -1,6 +1,7 @@
 from pathlib import Path
 import environ
 from django.core.management.utils import get_random_secret_key
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -12,6 +13,10 @@ env = environ.Env(
 env_file = BASE_DIR / '../.env'
 if env_file.exists():
     environ.Env.read_env(str(env_file))
+
+log_dir = BASE_DIR / 'logs'
+if not log_dir.exists():
+    os.makedirs(log_dir)
 
 # Secret key
 SECRET_KEY = env('DJANGO_SECRET_KEY', default=get_random_secret_key())
@@ -234,10 +239,11 @@ if not DEVELOPMENTMODE:
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+# Ensure the logs directory exists
+
 
 # Logging settings
-if not DEBUG:
-    LOGGING = {
+LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
@@ -246,7 +252,8 @@ if not DEBUG:
         },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs/django.log',
+            'filename': log_dir / 'django.log',
+            'formatter': 'verbose',
         },
     },
     'root': {
@@ -258,6 +265,16 @@ if not DEBUG:
             'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
+        },
+    },
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
         },
     },
 }

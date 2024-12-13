@@ -24,7 +24,7 @@ services:
   celery:
     build:
       context: ./backend
-      dockerfile: infrastructure/celery/celery-worker/Dockerfile
+      dockerfile: ../infrastructure/celery/celery-flower/Dockerfile
     container_name: painfx_celery
     env_file: .env
     depends_on:
@@ -40,7 +40,7 @@ services:
   celery-flower:
     build:
       context: ./backend
-      dockerfile: infrastructure/celery/celery-flower/Dockerfile
+      dockerfile: ../infrastructure/celery/celery-flower/Dockerfile
     container_name: painfx_celery_flower
     env_file: .env
     ports:

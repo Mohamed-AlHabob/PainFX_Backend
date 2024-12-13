@@ -3,6 +3,7 @@ FROM python:3.12-slim
 
 # Set the working directory
 WORKDIR /app
+RUN mkdir -p /app/logs
 
 # Install system dependencies for GDAL and other required tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
