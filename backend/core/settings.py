@@ -122,20 +122,11 @@ if DEVELOPMENTMODE:
     MEDIA_URL = 'media/'
     MEDIA_ROOT = BASE_DIR / 'media'
 else:
-    AWS_S3_ACCESS_KEY_ID = env('AWS_S3_ACCESS_KEY_ID', default='')
-    AWS_S3_SECRET_ACCESS_KEY = env('AWS_S3_SECRET_ACCESS_KEY', default='')
-    AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='')
-    AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='')
-    AWS_S3_ENDPOINT_URL = f'https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com'
-    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-    AWS_DEFAULT_ACL = 'public-read'
-    AWS_LOCATION = 'static'
-    AWS_MEDIA_LOCATION = 'media'
-    AWS_S3_CUSTOM_DOMAIN = env('AWS_S3_CUSTOM_DOMAIN', default='')
-    STORAGES = {
-        'default': {'BACKEND': 'custom_storages.CustomS3Boto3Storage'},
-        'staticfiles': {'BACKEND': 'storages.backends.s3boto3.S3StaticStorage'}
-    }
+    STATIC_URL = 'static/'
+    STATIC_ROOT = BASE_DIR / 'staticfiles'
+    MEDIA_URL = 'media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
+    
 
 # Domain and site settings
 DOMAIN = env('DOMAIN', default='localhost:3000')
