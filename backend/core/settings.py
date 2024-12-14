@@ -221,7 +221,7 @@ broker_connection_retry_on_startup = True
 
 # Security settings for production
 if not DEVELOPMENTMODE:
-    SECURE_SSL_REDIRECT = True
+    SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 3600
