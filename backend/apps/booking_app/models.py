@@ -3,8 +3,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from apps.authentication.models import Specialization, User, Doctor, Patient
-from apps.general import GeolocationService
-import json
+
 # Abstract Base Model
 class BaseModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -38,19 +37,6 @@ class CampaignStatus(models.TextChoices):
     ACTIVE = 'active', 'Active'
     PAUSED = 'paused', 'Paused'
     COMPLETED = 'completed', 'Completed'
-
-class Tag(models.Model):
-    name = models.CharField(max_length=50, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        indexes = [models.Index(fields=['name'])]
-        verbose_name = "Tag"
-        verbose_name_plural = "Tags"
-
-    def __str__(self):
-        return self.name
-
 
 # ---------------------------------------------
 # Tags
