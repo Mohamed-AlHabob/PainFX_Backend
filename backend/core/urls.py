@@ -5,9 +5,8 @@ from django.conf.urls.static import static
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from django.http import HttpResponse
 
-
-# Define the schema view for Swagger
 schema_view = get_schema_view(
     openapi.Info(
         title="API",
@@ -21,15 +20,14 @@ schema_view = get_schema_view(
     permission_classes=[permissions.AllowAny],
 )
 
-# Define your API URLs
 rest_api_urlpatterns = [
     path('api/', include('djoser.urls')),
     path('api/', include('apps.authentication.urls')),
     path('api/', include('apps.booking_app.urls')),
 ]
 
-# Define the URL patterns
 urlpatterns = [
+    path('', lambda request: HttpResponse('Welcome to PainFX!')),
     path('admin/', admin.site.urls),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
