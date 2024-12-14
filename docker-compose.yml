@@ -91,15 +91,17 @@ services:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - certbot-etc:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot:ro
+    command: ["nginx", "-g", "daemon off;"]
     depends_on:
       - backend
     networks:
       - mynetwork
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+
 
   certbot:
     image: certbot/certbot
@@ -108,10 +110,7 @@ services:
       - certbot-etc:/etc/letsencrypt
       - certbot-var:/var/lib/letsencrypt
       - certbot-www:/var/www/certbot
-    command: >
-      certonly --webroot --webroot-path=/var/www/certbot
-      --email supernovasoftwareco@gmail.com --agree-tos --no-eff-email
-      -d authen.io -d www.authen.io
+    entrypoint: sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot; done'
 
 networks:
   mynetwork:
